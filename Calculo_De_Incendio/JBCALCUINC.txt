@@ -1,0 +1,39 @@
+//LAUTASAR JOB (JOIN2226),'PROYECTOS',REGION=0M,NOTIFY=&SYSUID,         00010000
+//         MSGLEVEL=(1,1),MSGCLASS=X,CLASS=C,TIME=1440,                 00020000
+//         COND=(4,LT),RESTART=*                                        00030000
+//*----------------------------------------------------------------+    00040000
+//JOBLIB   DD  DSN=ENDEVOR.ADDLIB,DISP=SHR                    		00050000
+//*         
+//REPOSIT  JCLLIB  ORDER=ALSC.REPOLAU                                   00190000
+//*                                                                     00200000
+//*DELETE                                                               00210000
+//DEL02    EXEC PGM=IDCAMS                                              00220000
+//SYSPRINT DD SYSOUT=*                                                  00230000
+//SYSIN    DD *                                                         00240000
+  DELETE ALSC.PARC.CBSEGLAU.JOBCALCU.SALIDA1                           00250000
+  DELETE ALSC.PARC.CBSEGLAU.JOBCALCU.SALIDA2                           00260000
+  SET MAXCC=0                                                           00270000
+//*                                                                     00280000
+//PASO01   EXEC PGM=IKJEFT1B,DYNAMNBR=20                                00290000
+//SYSABOUT DD  SYSOUT=*                                                 00300000
+//SYSDBOUT DD  SYSOUT=*                                                 00310000
+//SYSUDUMP DD  SYSOUT=*                                                 00320000
+//SYSOUT   DD  SYSOUT=*                                                 00330000
+//SYSTSPRT DD  SYSOUT=*                                                 00340000
+//SYSPRINT DD  SYSOUT=*                                                 00350000
+//ENTRADA  DD DSN=ALSC.PARC.EJEM.ENTRADA,                              00360001
+//            DISP=SHR                                                  00370000
+//SALIDA   DD DSN=ALSC.PARC.CBSEGLAU.JOBCALCU.SALIDA1,                 00380000
+//            DISP=(,CATLG,DELETE),                                     00390000
+//            SPACE=(CYL,(5,10),RLSE),                                  00400000
+//            RECFM=FB,DCB=LRECL=64                                     00410000
+//T2226OE  DD DSN=ALSC.PARC.CBSEGLAU.JOBCALCU.SALIDA2,                 00420000
+//            DISP=(,CATLG,DELETE),                                     00430000
+//            SPACE=(CYL,(5,10),RLSE),                                  00440000
+//            RECFM=FB,DCB=LRECL=174                                    00450000
+//SYSTSIN  DD *                                                         00460000
+  DSN SYSTEM(DB2D)                                                      00470000
+  RUN PROGRAM(CALCUINC) PLAN (UTSURBPL)                                 00480000
+  END                                                                   00490000
+/*                                                                      00500000
+
