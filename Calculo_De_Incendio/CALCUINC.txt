@@ -1,0 +1,1294 @@
+      *----------------------------------------------------------------*00010000
+      * SISTEMA  :  (PRESTAMOS)                                        *00020000
+      *----------------------------------------------------------------*00030000
+      *                           OBJETIVO                             *00040000
+      ******************************************************************00050000
+      *                                                                *00060000
+      *  REALIZA EL IMPACTO DEL SEGURO DE INCENDIO CALCULADO EN LAS    *00070000
+      *  TABLAS CORRESPONDIENTES.                                      *00080000
+      *                                                                *00090000
+      *  INSERT EN TABLAS: TTBCUOTAS, TTBMOVIMIE, TBDEVENGAM           *00100000
+      *  UPDATE EN TABLAS: TTBPRESTAMOS                                *00110000
+      *                                                                *00120000
+      ******************************************************************00190000
+       ID DIVISION.                                                     00200000
+      ******************************************************************00210000
+      *                                                                 00220000
+       PROGRAM-ID.           INCECALC.                                  00230000
+       AUTHOR.               LAUTARO SARDINA.            		00240000
+       DATE-WRITTEN.         AGOSTO/2024.                               00250000
+      ***********************                                           00260000
+       ENVIRONMENT DIVISION.                                            00270000
+      ***********************                                           00280000
+       CONFIGURATION SECTION.                                           00290000
+      *----------------------------------------------------------------*00300000
+       SPECIAL-NAMES.                                                   00310000
+           DECIMAL-POINT IS COMMA.                                      00320000
+      *----------------------------------------------------------------*00330000
+       INPUT-OUTPUT SECTION.                                            00340000
+      *----------------------------------------------------------------*00350000
+       FILE-CONTROL.                                                    00360000
+      *                                                                 00370000
+           SELECT ENTRADA  ASSIGN  ENTRADA                              00380000
+                           FILE STATUS IS FS-ENTRADA.                   00390000
+                                                                        00400000
+           SELECT SALIDA   ASSIGN  SALIDA                               00410000
+                           FILE STATUS IS FS-SALIDA.                    00420000
+                                                                        00430000
+           SELECT TBCUOTAS  ASSIGN  TBCUOTAS                              00440000
+                           FILE STATUS IS FS-TBCUOTAS.                   00450000
+      *                                                                 00460000
+      ***************                                                   00470000
+       DATA DIVISION.                                                   00480000
+      ***************                                                   00490000
+       FILE SECTION.                                                    00500000
+      ***************                                                   00510000
+      *                                                                 00520000
+       FD  ENTRADA                                                      00530000
+           BLOCK 0                                                      00540000
+           RECORDING MODE IS F                                          00550000
+           LABEL RECORDS ARE STANDARD                                   00560000
+           DATA RECORD IS  REG-ENTRADA.                                 00570000
+                                                                        00580000
+       01  REG-ENTRADA                   PIC X(087).                    00590000
+                                                                        00600000
+       FD  SALIDA                                                       00610000
+           BLOCK 0                                                      00620000
+           RECORDING MODE IS F                                          00630000
+           LABEL RECORDS ARE STANDARD                                   00640000
+           DATA RECORD IS  REG-SALIDA.                                  00650000
+                                                                        00660000
+       01  REG-SALIDA                    PIC X(064).                    00670000
+                                                                        00680000
+       FD  TBCUOTAS                                                      00690000
+           BLOCK 0                                                      00700000
+           RECORDING MODE IS F                                          00710000
+           LABEL RECORDS ARE STANDARD                                   00720000
+           DATA RECORD IS  REG-TBCUOTAS.                                 00730000
+                                                                        00740000
+       01  REG-TBCUOTAS                   PIC X(174).                    00750000
+      *                                                                 00760000
+      *************************                                         00770000
+       WORKING-STORAGE SECTION.                                         00780000
+      *************************                                         00790000
+                                                                        00800000
+      *----------------------------------------------------------------*00810000
+      *                   VarIables de fIle status                      00820000
+      *----------------------------------------------------------------*00830000
+       01  FS-VARIABLES-FS.                                             00840000
+           03 FS-ENTRADA                 PIC X(02) VALUE SPACES.        00850000
+              88 FS-ENTRADA-OK                     VALUE '00'.          00860000
+              88 FS-ENTRADA-EOF                    VALUE '10'.          00870000
+           03 FS-SALIDA                  PIC X(02) VALUE SPACES.        00880000
+              88 FS-SALIDA-OK                      VALUE '00'.          00890000
+           03 FS-TBCUOTAS                 PIC X(02) VALUE SPACES.        00900000
+              88 FS-TBCUOTAS-OK                        VALUE '00'.       00910000
+      *                                                                 00920000
+      *----------------------------------------------------------------*00930000
+      *                       CAMPOS AUXILIARES                         00940000
+      *----------------------------------------------------------------*00950000
+      *                                                                 00960000
+       77 CT-COPGES5                    PIC X(08) VALUE 'COPGES5'.    00970000
+       77 PROGEDG                       PIC X(08) VALUE 'PROGEDG'.    00980000
+       77 MOD-CODE68A                    PIC X(08) VALUE 'CODE68A'.     00990000
+       77 PROGAJU                       PIC X(08) VALUE 'PROGAJU'.    01000000
+       77 W-CANCEL                       PIC X(07) VALUE 'CANCEL'.      01010000
+       77 W-SQLCODE                      PIC -ZZZ9.                     01020000
+       77 W-FILAS                        PIC -ZZZ9.                     01030000
+       77 W-TIPNEG                       PIC -9.                        01040000
+       77 W-IND                          PIC 9(04) VALUE 0.             01050000
+       77 W-ENC                          PIC 99    VALUE 0.             01060000
+       77 W-TPCSUBSI                     PIC S9(4)V9(7)  VALUE 0.       01070000
+       77 W-TASA-INTE-EXELIN                   PIC S9(3)V9(3) VALUE 0.        01080000
+       77 W-FIN-ENTRADA                  PIC X(01) VALUE 'N'.           01090000
+       77 W-FECHA-CONSULTA                   PIC X(10) VALUE SPACES.        01100000
+       77 W-LEIDOS-ENT                   PIC 9(06) VALUE 0.             01110000
+       77 W-SEL-VTBPRESTAMOS                  PIC 9(06) VALUE 0.             01120000
+       77 W-INS-VTBCUOTAS                  PIC 9(06) VALUE 0.             01130000
+       77 W-INS-VTBMOVIMIE                  PIC 9(06) VALUE 0.             01140000
+       77 W-INS-PTBDEVENGAM                  PIC 9(06) VALUE 0.             01150000
+       77 W-UPD-VTBPRESTAMOS                  PIC 9(06) VALUE 0.             01160000
+       77 W-GRA-SALIDA                   PIC 9(06) VALUE 0.             01170000
+       77 W-GRA-TBCUOTAS                  PIC 9(06) VALUE 0.             01180000
+       01 WS-ESTADO-SUBSIDIO             PIC X(02) VALUE 'NO'.          01190000
+          88 TIENE-SUBSIDIO                        VALUE 'SI'.          01200000
+          88 NO-TIENE-SUBSIDIO                     VALUE 'NO'.          01210000
+      *                                                                 01220000
+      *                                                                 01230000
+      *----------------------------------------------------------------*01240000
+      *                      DECLARACION DE COPYS                      *01250000
+      *----------------------------------------------------------------*01260000
+      *                                                                 01270000
+      *COPY ARCHIVO DE ENTRADA.                                         01280000
+        COPY COPGES3.                                                  01290000
+                                                                        01300000
+      *COPY ARCHIVO DE SALIDA.                                          01310000
+        COPY COPGES5.                                                  01320000
+      *                                                                 01330000
+       COPY CODE17A.                                                   01340000
+      *                                                                 01350000
+       COPY CODE20A.                                                   01360000
+      *                                                                 01370000
+       01  AREA-DATOS-CODE22A.                                          01380000
+         COPY  CODE22A.                                                 01390000
+       01  PARRAFO-CODE68A     PIC  X(50).                              01400000
+       01  TABLA-CODE68A       PIC  X(20).                              01410000
+       01  SQLCODE-CODE68A     PIC S9(09) BINARY.                       01420000
+      *                                                                 01430000
+       COPY PTCAJU01.                                                   01440000
+      *                                                                 01450000
+      *---------------------------------------------------------------* 01460000
+      *            INCLUIR LAS TABLAS PARA EL PROGRAMA                  01470000
+      *---------------------------------------------------------------* 01480000
+      *                                                                 01490000
+           EXEC SQL INCLUDE SQLCA    END-EXEC.                          01500000
+                                                                        01510000
+           EXEC SQL INCLUDE VTBPRESTAMOS END-EXEC.                      01520000
+           EXEC SQL INCLUDE PTBPRESTAMOS END-EXEC.                      01530000
+           EXEC SQL INCLUDE NTBPRESTAMOS END-EXEC.                      01540000
+                                                                        01550000
+           EXEC SQL INCLUDE VTBCUOTAS END-EXEC.                         01560000
+           EXEC SQL INCLUDE PTBCUOTAS END-EXEC.                         01570000
+                                                                        01580000
+           EXEC SQL INCLUDE VTBMOVIMIE END-EXEC.                        01590000
+           EXEC SQL INCLUDE PTBMOVIMIE END-EXEC.                        01600000
+                                                                        01610000
+           EXEC SQL INCLUDE VTBDATCOMPLE END-EXEC.                      01620000
+           EXEC SQL INCLUDE STBDATCOMPLE END-EXEC.                      01630000
+                                                                        01640000
+           EXEC SQL INCLUDE PTBDEVENGAM END-EXEC.                       01650000
+           EXEC SQL INCLUDE PTBDEVENGAM END-EXEC.                       01660000
+           EXEC SQL INCLUDE NTBDEVENGAM END-EXEC.                       01670000
+      *                                                                 01680000
+      *****************                                                 01690000
+       LINKAGE SECTION.                                                 01700000
+      *****************                                                 01710000
+      *                                                                 01720000
+      ********************                                              01730000
+       PROCEDURE DIVISION.                                              01740000
+      ********************                                              01750000
+      *                                                                 01760000
+      *---------------------------------------------------------------* 01770000
+       0000-PROCESO.                                                    01780000
+      *-------------*                                                   01790000
+      *                                                                 01800000
+           PERFORM 0010-PROC-INICIO                                     01810000
+              THRU 0010-FIN-PROC-INICIO.                                01820000
+                                                                        01830000
+           PERFORM 0020-PRINCIPAL                                       01840000
+              THRU 0020-FIN-PRINCIPAL                                   01850000
+             UNTIL W-FIN-ENTRADA = 'S'                                  01860000
+                                                                        01870000
+           PERFORM 0030-TRATAMIENTO-FINAL                               01880000
+              THRU 0030-FIN-TRATAMIENTO-FINAL.                          01890000
+                                                                        01900000
+           STOP RUN.                                                    01910000
+      *                                                                 01920000
+       0000-FIN-PROCESO.                                                01930000
+           EXIT.                                                        01940000
+                                                                        01950000
+      *----------------------------------------------------------------*01960000
+       0010-PROC-INICIO.                                                01970000
+      *-----------------*                                               01980000
+      *                                                                 01990000
+           PERFORM ABRIR-ARCHIVOS                                       02000000
+              THRU F-ABRIR-ARCHIVOS.                                    02010000
+                                                                        02020000
+           PERFORM LEER-ENTRADA                                         02030000
+              THRU F-LEER-ENTRADA.                                      02040000
+      *                                                                 02050000
+       0010-FIN-PROC-INICIO.                                            02060000
+           EXIT.                                                        02070000
+                                                                        02080000
+      *----------------------------------------------------------------*02090000
+       ABRIR-ARCHIVOS.                                                  02100000
+      *---------------*                                                 02110000
+      *                                                                 02120000
+           OPEN INPUT ENTRADA.                                          02130000
+                                                                        02140000
+           EVALUATE FS-ENTRADA                                          02150000
+               WHEN '00'                                                02160000
+                    CONTINUE                                            02170000
+               WHEN OTHER                                               02180000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '      02190000
+                    DISPLAY 'ERROR EN LA APERTURA DEL FILE ENTRADA'     02200000
+                    DISPLAY 'FILE STATUS :  '  FS-ENTRADA               02210000
+                                                                        02220000
+                    PERFORM CANCELAR                                    02230000
+                       THRU F-CANCELAR                                  02240000
+           END-EVALUATE.                                                02250000
+      *                                                                 02260000
+           OPEN OUTPUT SALIDA.                                          02270000
+                                                                        02280000
+           EVALUATE FS-SALIDA                                           02290000
+               WHEN '00'                                                02300000
+                    CONTINUE                                            02310000
+               WHEN OTHER                                               02320000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '      02330000
+                    DISPLAY 'ERROR EN LA APERTURA DEL FILE SALIDA'      02340000
+                    DISPLAY 'FILE STATUS :  '  FS-SALIDA                02350000
+                                                                        02360000
+                    PERFORM CANCELAR                                    02370000
+                       THRU F-CANCELAR                                  02380000
+           END-EVALUATE.                                                02390000
+      *                                                                 02400000
+           OPEN OUTPUT TBCUOTAS.                                         02410000
+                                                                        02420000
+           EVALUATE FS-TBCUOTAS                                          02430000
+               WHEN '00'                                                02440000
+                    CONTINUE                                            02450000
+               WHEN OTHER                                               02460000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '      02470000
+                    DISPLAY 'ERROR EN LA APERTURA DEL FILE TBCUOTAS '    02480000
+                    DISPLAY 'FILE STATUS :  '  FS-TBCUOTAS               02490000
+                                                                        02500000
+                    PERFORM CANCELAR                                    02510000
+                       THRU F-CANCELAR                                  02520000
+           END-EVALUATE.                                                02530000
+      *                                                                 02540000
+       F-ABRIR-ARCHIVOS.                                                02550000
+           EXIT.                                                        02560000
+                                                                        02570000
+      *---------------------------------------------------------------* 02580000
+       LEER-ENTRADA.                                                    02590000
+      *-------------*                                                   02600000
+      *                                                                 02610000
+           READ ENTRADA INTO REG-COPGES3.                               02620000
+                                                                        02630000
+           EVALUATE TRUE                                                02640000
+               WHEN FS-ENTRADA-OK                                       02650000
+                    ADD 1                     TO W-LEIDOS-ENT           02660000
+               WHEN FS-ENTRADA-EOF                                      02670000
+                    MOVE  'S'                 TO W-FIN-ENTRADA          02680000
+               WHEN OTHER                                               02690000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '       02700000
+                    DISPLAY 'ERROR EN PROCESO DE LECTURA FILE ENTRADA'  02710000
+                    DISPLAY 'FILE STATUS :  '  FS-ENTRADA               02720000
+                                                                        02730000
+                    PERFORM CANCELAR                                    02740000
+                       THRU F-CANCELAR                                  02750000
+           END-EVALUATE.                                                02760000
+      *                                                                 02770000
+       F-LEER-ENTRADA.                                                  02780000
+           EXIT.                                                        02790000
+                                                                        02800000
+      *---------------------------------------------------------------* 02810000
+       0020-PRINCIPAL.                                                  02820000
+      *---------------*                                                 02830000
+      *                                                                 02840000
+           PERFORM SELECT-VTBPRESTAMOS                                  02850000
+              THRU F-SELECT-VTBPRESTAMOS                                02860000
+                                                                        02870000
+           PERFORM SELECT-VTBDATCOMPLE                                  02880000
+              THRU F-SELECT-VTBDATCOMPLE                                02890000
+                                                                        02900000
+           IF TIENE-SUBSIDIO                                            02910000
+              PERFORM TASA-SUBSIDIADA                                   02920000
+                 THRU F-TASA-SUBSIDIADA                                 02930000
+           ELSE                                                         02940000
+              MOVE ZEROES TO W-TPCSUBSI                                 02950000
+           END-IF                                                       02960000
+                                                                        02970000
+           PERFORM GENERAR-TBCUOTAS                                     02980000
+              THRU F-GENERAR-TBCUOTAS                                   02990000
+                                                                        03000000
+           PERFORM GRABAR-TBCUOTAS                                      03010000
+              THRU F-GRABAR-TBCUOTAS                                    03020000
+                                                                        03030000
+           PERFORM GENERAR-TBMOVIMIE                                    03040000
+              THRU F-GENERAR-TBMOVIMIE                                  03050000
+                                                                        03060000
+           PERFORM MODIFICAR-VTBPRESTAMOS                               03070000
+              THRU F-MODIFICAR-VTBPRESTAMOS                             03080000
+                                                                        03090000
+           PERFORM SELECT-PTBDEVENGAM-0                                 03100000
+              THRU F-SELECT-PTBDEVENGAM-0                               03110000
+                                                                        03120000
+           IF VTBPRESTAMOS-CERSIO-NU NOT = 0                           03130000
+              PERFORM CALL-PROGAJU                                     03140000
+                 THRU F-CALL-PROGAJU                                   03150000
+           END-IF                                                       03160000
+                                                                        03170000
+           PERFORM GENERAR-TBDEVENGAM                                   03180000
+              THRU F-GENERAR-TBDEVENGAM                                 03190000
+                                                                        03200000
+           PERFORM INSERT-TBDEVENGAM                                    03210000
+              THRU F-INSERT-TBDEVENGAM                                  03220000
+                                                                        03230000
+           PERFORM GRABAR-SALIDA                                        03240000
+              THRU F-GRABAR-SALIDA                                      03250000
+                                                                        03260000
+           PERFORM LEER-ENTRADA                                         03270000
+              THRU F-LEER-ENTRADA.                                      03280000
+      *                                                                 03290000
+       0020-FIN-PRINCIPAL.                                              03300000
+           EXIT.                                                        03310000
+                                                                        03320000
+      *---------------------------------------------------------------* 03330000
+       SELECT-VTBPRESTAMOS.                                             03340000
+      *---------------*                                                 03350000
+      *                                                                 03360000
+           MOVE COPGES3-N-CONTRAT      TO VTBPRESTAMOS-N-CONTRAT.     03370000
+                                                                        03380000
+           EXEC SQL                                                     03390000
+                SELECT BANCO_CODI ,                                     03400000
+                       CODI_OFIGRU ,                                     03410000
+                       CLASI_NUME ,                                     03420000
+                       INDIC_CUENTA ,                                     03430000
+                       CUENTA_CONT ,                                     03440000
+                       SALDO_CONSULTA ,                                     03450000
+                       FEC_ACTUSAL ,                                     03460000
+                       ULTI_NUMMOV ,                                     03470000
+                       CANT_OPEREM ,                                     03480000
+                       CANT_OPERPR ,                                     03490000
+                       COD_MODPRODU ,                                     03500000
+                       TIPO_MONED ,                                     03510000
+                       TIPO_CONTT ,                                     03520000
+                       IN_CUE_XEL ,                                     03530000
+                       TIPO_DT_ECU ,                                     03540000
+                       CERSIO_NU ,                                     03550000
+                       FEC_FORMAC ,                                     03560000
+                       LIQUIDA_MD                                       03570000
+                 INTO :VTBPRESTAMOS-BANCO-CODI ,                        03580000
+                      :VTBPRESTAMOS-CODI-OFIGRU ,                        03590000
+                      :VTBPRESTAMOS-CLASI-NUME ,                        03600000
+                      :VTBPRESTAMOS-INDIC-CUENTA ,                        03610000
+                      :VTBPRESTAMOS-CUENTA-CONT ,                        03620000
+                      :VTBPRESTAMOS-SALDO-CONSULTA ,                        03630000
+                      :VTBPRESTAMOS-FEC-ACTUSAL ,                        03640000
+                      :VTBPRESTAMOS-ULTI-NUMMOV ,                        03650000
+                      :VTBPRESTAMOS-CANT-OPEREM ,                        03660000
+                      :VTBPRESTAMOS-CANT-OPERPR ,                        03670000
+                      :VTBPRESTAMOS-COD-MODPRODU ,                        03680000
+                      :VTBPRESTAMOS-TIPO-MONED ,                        03690000
+                      :VTBPRESTAMOS-TIPO-CONTT ,                        03700000
+                      :VTBPRESTAMOS-IN-CUE-XEL ,                        03710000
+                      :VTBPRESTAMOS-TIPO-DT-ECU ,                        03720000
+                      :VTBPRESTAMOS-CERSIO-NU ,                        03730000
+                      :VTBPRESTAMOS-FEC-FORMAC ,                        03740000
+                      :VTBPRESTAMOS-LIQUIDA-MD                          03750000
+                 FROM  VTBPRESTAMOS                                     03760000
+                WHERE  N_CONTRAT  =  :VTBPRESTAMOS-N-CONTRAT          03770000
+           END-EXEC                                                     03780000
+                                                                        03790000
+           EVALUATE SQLCODE                                             03820000
+               WHEN 0                                                   03830000
+                    ADD  1               TO W-SEL-VTBPRESTAMOS          03840000
+               WHEN OTHER                                               03970000
+                    DISPLAY 'ERROR SELECT TTBPRESTAMOS --> CONTRATO: '  03980000
+                                            VTBPRESTAMOS-N-CONTRAT     03990000
+                    MOVE SQLCODE         TO W-SQLCODE                   04000000
+                    DISPLAY 'SQLCODE: '     W-SQLCODE                   04010000
+                                                                        04020000
+                    PERFORM CANCELAR                                    04030000
+                       THRU F-CANCELAR                                  04040000
+           END-EVALUATE.                                                04050000
+      *                                                                 04060000
+       F-SELECT-VTBPRESTAMOS.                                           04070000
+           EXIT.                                                        04080000
+                                                                        04090000
+      *---------------------------------------------------------------* 04100000
+       SELECT-VTBDATCOMPLE.                                                  04110000
+      *---------------*                                                 04120000
+                                                                        04130000
+           MOVE COPGES3-N-CONTRAT    TO N-CONTRAT-VTBDATCOMPLE.       04140000
+                                                                        04150000
+           EXEC SQL                                                     04160000
+                SELECT                                                  04170000
+                EST_OPER                                                04180000
+                INTO                                                    04190000
+               :EST-OPER-VTBDATCOMPLE                                   04200000
+                FROM VTBDATCOMPLE                                       04210000
+                WHERE N_CONTRAT = :N-CONTRAT-VTBDATCOMPLE             04220000
+           END-EXEC.                                                    04230000
+                                                                        04240000
+           IF  SQLCODE NOT = 00                                         04250000
+               DISPLAY 'ERROR SELECT TTBDATCOMPLE --> CONTRATO: '       04260000
+                                       COPGES3-N-CONTRAT               04270000
+               MOVE SQLCODE         TO W-SQLCODE                        04280000
+               DISPLAY 'TTBDATCOMPLE SQLCODE: '     W-SQLCODE           04290000
+               PERFORM CANCELAR                                         04300000
+                  THRU F-CANCELAR                                       04310000
+           ELSE                                                         04320000
+               IF EST-OPER-VTBDATCOMPLE = 1 OR 2 OR 3 OR 4              04330000
+                  SET TIENE-SUBSIDIO       TO TRUE                      04340000
+               ELSE                                                     04350000
+                  SET NO-TIENE-SUBSIDIO    TO TRUE                      04360000
+               END-IF                                                   04370000
+           END-IF.                                                      04380000
+      *                                                                 04390000
+       F-SELECT-VTBDATCOMPLE.                                           04400000
+           EXIT.                                                        04410000
+                                                                        04420000
+      *---------------------------------------------------------------* 04430000
+       TASA-SUBSIDIADA.                                                 04440000
+      *---------------*                                                 04450000
+                                                                        04460000
+           INITIALIZE CODE17 CODE20.                                  04470000
+           MOVE COPGES3-N-CONTRAT TO CODE17-N-CONTRAT.               04480000
+           MOVE VTBPRESTAMOS-BANCO-CODI TO CODE17-BANCO-CODI.          04490000
+           MOVE VTBPRESTAMOS-CODI-OFIGRU TO CODE17-CODI-OFIGRU.          04500000
+           MOVE VTBPRESTAMOS-CLASI-NUME TO CODE17-CLASI-NUME.          04510000
+           MOVE VTBPRESTAMOS-CLASI-NUME TO CODE17-C-PRODUCTO.          04520000
+           MOVE VTBPRESTAMOS-COD-MODPRODU TO CODE17-COD-MODPRODU.          04530000
+           MOVE VTBPRESTAMOS-TIPO-MONED TO CODE17-TIPO-MONED.          04540000
+           MOVE 1                   TO CODE17-CL-ACCION.               04550000
+           MOVE 6                   TO CODE17-CONSID-TPC.              04560000
+           MOVE 2                   TO CODE17-LIQUIDACION-NUM.              04570000
+           MOVE 1                   TO CODE17-C-ORI-APCO.              04580000
+           MOVE 2                   TO CODE17-ESTAD-CLIQ.              04590000
+           MOVE 3                   TO CODE17-C-CONLIQAP.              04600000
+           MOVE COPGES3-F-LIQ      TO CODE17-F-VIG-CLIQ.               04610000
+                                                                        04620000
+           CALL PROGEDG USING CODE17 CODE20.                          04630000
+                                                                        04640000
+           IF CODE20-NUM-ERROR < 000                                   04650000
+              DISPLAY 'COPGES5. CANCELADO EN TASA-SUBSIDIADA'          04660000
+              DISPLAY '-*- ERROR MODULO PROGEDG.'                       04670000
+              DISPLAY '-*- CONTRATO..: ' COPGES3-N-CONTRAT             04680000
+              MOVE CODE20-NUM-ERROR TO W-SQLCODE                       04690000
+              DISPLAY '-*- NUM-ERROR.: ' W-SQLCODE                      04700000
+              DISPLAY '-*- MEN-ERROR.: ' CODE20-MEN-ERROR              04710000
+              DISPLAY '******************************'                  04720000
+              PERFORM CANCELAR                                          04730000
+                 THRU F-CANCELAR                                        04740000
+           ELSE                                                         04750000
+              IF CODE20-NUM-ERROR NOT = 0 AND 13                       04760000
+                 DISPLAY 'COPGES5. CANCELADO EN TASA-SUBSIDIADA'       04770000
+                 DISPLAY '-*- ERROR MODULO PROGEDG.'                    04780000
+                 DISPLAY '-*- CONTRATO..: ' COPGES3-N-CONTRAT          04790000
+                 MOVE CODE20-NUM-ERROR TO W-SQLCODE                    04800000
+                 DISPLAY '-*- NUM-ERROR.: ' W-SQLCODE                   04810000
+                 DISPLAY '-*- MEN-ERROR.: ' CODE20-MEN-ERROR           04820000
+                 DISPLAY '******************************'               04830000
+                 PERFORM CANCELAR                                       04840000
+                    THRU F-CANCELAR                                     04850000
+              ELSE                                                      04860000
+                 IF CODE20-NUM-FILAS = 0  OR                           04870000
+                    CODE20-NUM-FILAS > 3                               04880000
+                    DISPLAY 'COPGES5. CANCELADO EN TASA-SUBSIDIADA'    04890000
+                    DISPLAY '-*- ERROR MODULO PROGEDG - NRO FILAS.'     04900000
+                    DISPLAY '-*- CONTRATO..: ' COPGES3-N-CONTRAT       04910000
+                    MOVE CODE20-NUM-FILAS TO W-FILAS                   04920000
+                    MOVE CODE20-NUM-ERROR TO W-SQLCODE                 04930000
+                    DISPLAY '-*- NUM-ERROR.: ' W-SQLCODE                04940000
+                    DISPLAY '-*- NUM-FILAS.: ' W-FILAS                  04950000
+                    DISPLAY '-*- MEN-ERROR.: ' CODE20-MEN-ERROR        04960000
+                    DISPLAY '******************************'            04970000
+                    PERFORM CANCELAR                                    04980000
+                       THRU F-CANCELAR                                  04990000
+                 ELSE                                                   05000000
+                    IF CODE20-TIPO-NEG(1) NOT = 2                      05010000
+                       DISPLAY 'COPGES5. CANCELADO EN TASA-SUBSIDIADA' 05020000
+                       DISPLAY '-*- ERROR MODULO PROGEDG - SIN TPC.'    05030000
+                       DISPLAY '-*- CONTRATO..: ' COPGES3-N-CONTRAT    05040000
+                       MOVE CODE20-TIPO-NEG(1) TO W-TIPNEG             05050000
+                       MOVE CODE20-NUM-ERROR   TO W-SQLCODE            05060000
+                       DISPLAY '-*- NUM-ERROR.: ' W-SQLCODE             05070000
+                       DISPLAY '-*- TIPO-NEG..: ' W-TIPNEG              05080000
+                       DISPLAY '-*- MEN-ERROR.: ' CODE20-MEN-ERROR     05090000
+                       DISPLAY '******************************'         05100000
+                       PERFORM CANCELAR                                 05110000
+                          THRU F-CANCELAR                               05120000
+                    END-IF                                              05130000
+                 END-IF                                                 05140000
+              END-IF                                                    05150000
+           END-IF                                                       05160000
+                                                                        05170000
+           MOVE 01 TO W-IND.                                            05180000
+           MOVE 00 TO W-ENC.                                            05190000
+           MOVE ZEROES TO W-TPCSUBSI.                                   05200000
+                                                                        05210000
+           PERFORM VER-DATOS-INTS-SUB                                   05220000
+              THRU F-VER-DATOS-INTS-SUB                                 05230000
+             UNTIL W-IND > CODE20-NUM-FILAS OR W-ENC = 99.             05240000
+                                                                        05250000
+           IF W-ENC = 00                                                05260000
+              DISPLAY 'COPGES5. CANCELADO EN TASA-SUBSIDIADA'          05270000
+              DISPLAY '-*- ERROR MODULO PROGEDG - TPC NO ENCONTRADA.'   05280000
+              DISPLAY '-*- CONTRATO..: ' COPGES3-N-CONTRAT             05290000
+              MOVE CODE20-NUM-ERROR  TO W-SQLCODE                      05300000
+              DISPLAY '-*- NUM-ERROR.: ' W-SQLCODE                      05310000
+              DISPLAY '-*- MEN-ERROR.: ' CODE20-MEN-ERROR              05320000
+              DISPLAY '******************************'                  05330000
+              PERFORM CANCELAR                                          05340000
+                 THRU F-CANCELAR                                        05350000
+           END-IF.                                                      05360000
+                                                                        05370000
+       F-TASA-SUBSIDIADA.                                               05380000
+           EXIT.                                                        05390000
+                                                                        05400000
+      *---------------------------------------------------------------* 05410000
+       VER-DATOS-INTS-SUB.                                              05420000
+      *------------------*                                              05430000
+           IF  CODE20-TIPO-REG (W-IND) = 2                              05440000
+               MOVE CODE20-TIPO-LIQUIDACION (W-IND) TO W-TPCSUBSI       05450000
+               MOVE 99 TO W-ENC                                         05460000
+           END-IF.                                                      05470000
+           ADD 1 TO W-IND.                                              05480000
+                                                                        05490000
+       F-VER-DATOS-INTS-SUB.                                            05500000
+           EXIT.                                                        05510000
+                                                                        05520000
+      *---                                                              05530000
+      *---------------------------------------------------------------* 05540000
+       GENERAR-TBCUOTAS.                                                05550000
+      *----------------*                                                05560000
+      *                                                                 05570000
+           INITIALIZE VTBCUOTAS-P                                       05580000
+                                                                        05590000
+           MOVE COPGES3-N-CONTRAT      TO VTBCUOTAS-N-CONTRAT.        	05600000
+           MOVE 1                        TO VTBCUOTAS-NU-CONTABLE.      05610000
+                                                                        05620000
+           COMPUTE VTBCUOTAS-OPERACION-ID =1 + VTBPRESTAMOS-CANT-OPEREM 05630000
+                                                                        05640000
+           MOVE 2                        TO VTBCUOTAS-TIPO-OPERACION.   05650000
+           MOVE COPGES3-F-LIQ           TO VTBCUOTAS-FEC-EMISION.       05660000
+           MOVE 5                        TO VTBCUOTAS-ESTADO-OPERACION. 05670000
+           MOVE COPGES3-F-LIQ           TO VTBCUOTAS-FEC-PREVIA.        05680000
+           MOVE 1                        TO VTBCUOTAS-COD-RECU-DEVENG.       05690000
+           MOVE COPGES3-TIPO-MONED      TO VTBCUOTAS-TIPO-MONED.        05700000
+           MOVE 0                        TO VTBCUOTAS-INDI-CUE-IMPOSIT.       05710000
+           MOVE COPGES3-F-LIQ           TO VTBCUOTAS-FEC-SITOPE-COR.        05720000
+           MOVE COPGES3-F-LIQ           TO VTBCUOTAS-FEC-SITOP-EXEN.        05730000
+           MOVE 0                        TO VTBCUOTAS-TOT-IMPOS-OTRCONCEP.       05740000
+           MOVE COPGES3-IMPOR-SE-NOCUB      TO VTBCUOTAS-IMPOR-SE-NOCUB.        05750000
+           MOVE COPGES3-IMPOR-SE-NOCUB      TO VTBCUOTAS-TOT-CUOCOR.        05760000
+           IF TIENE-SUBSIDIO                                            05770000
+              COMPUTE VTBCUOTAS-TASA-INTERES-NL =                       05780000
+                      VTBPRESTAMOS-TIPO-CONTT - W-TPCSUBSI              05790000
+           ELSE                                                         05800000
+              MOVE VTBPRESTAMOS-TIPO-CONTT TO VTBCUOTAS-TASA-INTERES-NL 05810000
+           END-IF                                                       05820000
+                                                                        05830000
+           PERFORM DETERMINAR-INT-EXC                                   05840000
+              THRU F-DETERMINAR-INT-EXC                                 05850000
+           MOVE W-TASA-INTE-EXELIN             TO VTBCUOTAS-TASA-INTE-EXELIN        05860000
+                                                                        05870000
+           PERFORM INSERT-VTBCUOTAS                                     06080000
+              THRU F-INSERT-VTBCUOTAS.                                  06090000
+      *                                                                 06100000
+       F-GENERAR-TBCUOTAS.                                              06110000
+           EXIT.                                                        06120000
+                                                                        06130000
+      *---------------------------------------------------------------* 06140000
+       DETERMINAR-INT-EXC.                                              06150000
+      *------------------*                                              06160000
+                                                                        06170000
+           MOVE ZEROES TO W-TASA-INTE-EXELIN                                  06180000
+                                                                        06190000
+           EVALUATE VTBPRESTAMOS-IN-CUE-XEL                             06200000
+           WHEN 1                                                       06210000
+           WHEN 5                                                       06220000
+                MOVE VTBPRESTAMOS-TIPO-DT-ECU TO W-TASA-INTE-EXELIN           06230000
+           WHEN 2                                                       06240000
+                COMPUTE W-TASA-INTE-EXELIN =                                  06250000
+                     VTBPRESTAMOS-TIPO-CONTT + VTBPRESTAMOS-TIPO-DT-ECU 06260000
+           WHEN 3                                                       06270000
+                COMPUTE W-TASA-INTE-EXELIN =                                  06280000
+                    VTBPRESTAMOS-TIPO-CONTT - VTBPRESTAMOS-TIPO-DT-ECU  06290000
+           WHEN 9                                                       06300000
+                IF TIENE-SUBSIDIO AND EST-OPER-VTBDATCOMPLE = 2         06310000
+                    PERFORM SGDA-TASA-DE-MORA                           06320000
+                       THRU F-SGDA-TASA-DE-MORA                         06330000
+                ELSE                                                    06340000
+                    PERFORM LLAMADA-CODE68A                             06350000
+                       THRU F-LLAMADA-CODE68A                           06360000
+                END-IF                                                  06370000
+                                                                        06380000
+                COMPUTE W-TASA-INTE-EXELIN =                                  06390000
+                        CODE22A-TPC-BASE + VTBPRESTAMOS-TIPO-DT-ECU     06400000
+           WHEN OTHER                                                   06410000
+                DISPLAY 'COPGES5. CANCELADO EN DETERMINAR-INT-EXC'      06420000
+                DISPLAY '-*- CONTRATO...: ' COPGES3-N-CONTRAT           06430000
+                MOVE VTBPRESTAMOS-IN-CUE-XEL TO W-TIPNEG                06440000
+                DISPLAY '-*- IN-CUE-XEL.: ' W-TIPNEG                    06450000
+                DISPLAY '******************************'                06460000
+                PERFORM CANCELAR                                        06470000
+                   THRU F-CANCELAR                                      06480000
+           END-EVALUATE.                                                06490000
+      *-                                                                06500000
+                                                                        06510000
+       F-DETERMINAR-INT-EXC.                                            06520000
+           EXIT.                                                        06530000
+                                                                        06540000
+      *---------------------------------------------------------------* 06550000
+       LLAMADA-CODE68A.                                                 06560000
+      *---------------*                                                 06570000
+                                                                        06580000
+           INITIALIZE AREA-DATOS-CODE22A                                06590000
+                      PARRAFO-CODE68A                                   06600000
+                      TABLA-CODE68A                                     06610000
+                      SQLCODE-CODE68A.                                  06620000
+           MOVE COPGES3-N-CONTRAT TO  CODE22A-N-CONTRAT                 06630000
+           MOVE 10                  TO  CODE22A-LIQUIDACION-NUM         06640000
+           MOVE 08                  TO  CODE22A-C-SIT-PROP              06650000
+           CALL MOD-CODE68A  USING  AREA-DATOS-CODE22A                  06660000
+                                    PARRAFO-CODE68A                     06670000
+                                    TABLA-CODE68A                       06680000
+                                    SQLCODE-CODE68A                     06690000
+                                                                        06700000
+           EVALUATE SQLCODE-CODE68A                                     06710000
+            WHEN 0                                                      06720000
+              CONTINUE                                                  06730000
+            WHEN OTHER                                                  06740000
+              DISPLAY 'COPGES5. CANCELADO EN LLAMADA-CODE68A'           06750000
+              DISPLAY 'ERROR EN LA LLAMADA AL CODE68A'                  06760000
+              MOVE SQLCODE-CODE68A TO W-SQLCODE                         06770000
+              DISPLAY 'SQLCODE-CODE68A:    ' W-SQLCODE                  06780000
+              DISPLAY 'NUMERO DE CONTRATO: ' COPGES3-N-CONTRAT          06790000
+              DISPLAY 'PARRAFO-CODE68A   : ' PARRAFO-CODE68A            06800000
+              DISPLAY 'TABLA-CODE68A     : ' TABLA-CODE68A              06810000
+              DISPLAY '******************************'                  06820000
+              PERFORM CANCELAR                                          06830000
+                 THRU F-CANCELAR                                        06840000
+           END-EVALUATE.                                                06850000
+                                                                        06860000
+       F-LLAMADA-CODE68A.                                               06870000
+           EXIT.                                                        06880000
+                                                                        06890000
+      *---------------------------------------------------------------* 06900000
+       SGDA-TASA-DE-MORA.                                               06910000
+      *-----------------*                                               06920000
+                                                                        06930000
+           INITIALIZE AREA-DATOS-CODE22A                                06940000
+                      PARRAFO-CODE68A                                   06950000
+                      TABLA-CODE68A                                     06960000
+                      SQLCODE-CODE68A.                                  06970000
+           MOVE COPGES3-N-CONTRAT TO  CODE22A-N-CONTRAT              06980000
+           MOVE 110                 TO  CODE22A-LIQUIDACION-NUM              06990000
+           MOVE 08                  TO  CODE22A-C-SIT-PROP              07000000
+           CALL MOD-CODE68A  USING  AREA-DATOS-CODE22A                  07010000
+                                    PARRAFO-CODE68A                     07020000
+                                    TABLA-CODE68A                       07030000
+                                    SQLCODE-CODE68A                     07040000
+                                                                        07050000
+           EVALUATE SQLCODE-CODE68A                                     07060000
+            WHEN 0                                                      07070000
+              CONTINUE                                                  07080000
+            WHEN OTHER                                                  07090000
+              DISPLAY 'COPGES5. CANCELADO EN SGDA-TASA-DE-MORA'        07100000
+              DISPLAY 'ERROR EN LA LLAMADA AL CODE68A'                  07110000
+              MOVE SQLCODE-CODE68A TO W-SQLCODE                         07120000
+              DISPLAY 'SQLCODE-CODE68A:    ' W-SQLCODE                  07130000
+              DISPLAY 'NUMERO DE CONTRATO: ' COPGES3-N-CONTRAT        07140000
+              DISPLAY 'PARRAFO-CODE68A   : ' PARRAFO-CODE68A            07150000
+              DISPLAY 'TABLA-CODE68A     : ' TABLA-CODE68A              07160000
+              DISPLAY '******************************'                  07170000
+              PERFORM CANCELAR                                          07180000
+                 THRU F-CANCELAR                                        07190000
+           END-EVALUATE.                                                07200000
+                                                                        07210000
+       F-SGDA-TASA-DE-MORA.                                             07220000
+           EXIT.                                                        07230000
+                                                                        07240000
+      *                                                                 07250000
+      *---------------------------------------------------------------* 07260000
+       INSERT-VTBCUOTAS.                                                07270000
+      *---------------*                                                 07280000
+      *                                                                 07290000
+           EXEC SQL                                                     07300000
+                INSERT INTO VTBCUOTAS                                   07310000
+                       (N_CONTRAT ,                                     07320000
+                        NU_CONTABLE ,                                   07330000
+                        OPERACION_ID ,                                  07340000
+                        TIPO_OPERACION ,                                07350000
+                        FEC_EMISION ,                                   07360000
+                        IMPOR_CAPITAL ,                                 07370000
+                        IMPOR_INTE_COR ,                                    07380000
+                        TASA_INTERES_NL ,                               07390000
+                        IMPOR_INT_EXEN ,                                    07400000
+                        TASA_INTE_EXELIN ,                                    07410000
+                        IMPOR_GASCOR ,                                    07420000
+                        IMPOR_IMPOSICOR ,                                    07430000
+                        TOT_CUOCOR ,                                    07440000
+                        ESTADO_OPERACION ,                              07450000
+                        FEC_PREVIA ,                                    07460000
+                        COD_RECU_DEVENG ,                                    07470000
+                        TIPO_MONED ,                                    07480000
+                        INDI_CUE_IMPOSIT ,                                    07490000
+                        FEC_SITOPE_COR ,                                    07500000
+                        FEC_SITOP_EXEN ,                                    07510000
+                        IMPOR_COMESTI ,                                    07520000
+                        TASA_INTER_RETEN ,                                    07530000
+                        IMPOR_INTE_RETEN ,                                    07540000
+                        TASA_COMIAPER ,                                    07550000
+                        IMPOR_COMIAPERT ,                                    07560000
+                        IMPOR_COMICOR ,                                    07570000
+                        TOT_IMPOS_OTRCONCEP ,                                    07580000
+                        IMPOR_COMI_PREM ,                                    07590000
+                        IMPOR_A_CUOVENCI ,                                    07600000
+                        IMPOR_IMPOSISEG ,                                    07610000
+                        IMPOR_COMIADMIN ,                                    07620000
+                        IMPOR_SEGVIDA ,                                    07630000
+                        IMPOR_SE_NOCUB )                                    07640000
+                VALUES(:VTBCUOTAS-N-CONTRAT ,                           07650000
+                       :VTBCUOTAS-NU-CONTABLE ,                         07660000
+                       :VTBCUOTAS-OPERACION-ID ,                        07670000
+                       :VTBCUOTAS-TIPO-OPERACION ,                      07680000
+                       :VTBCUOTAS-FEC-EMISION ,                         07690000
+                       :VTBCUOTAS-IMPOR-CAPITAL ,                       07700000
+                       :VTBCUOTAS-IMPOR-INTE-COR ,                          07710000
+                       :VTBCUOTAS-TASA-INTERES-NL ,                     07720000
+                       :VTBCUOTAS-IMPOR-INT-EXEN ,                          07730000
+                       :VTBCUOTAS-TASA-INTE-EXELIN ,                          07740000
+                       :VTBCUOTAS-IMPOR-GASCOR ,                          07750000
+                       :VTBCUOTAS-IMPOR-IMPOSICOR ,                          07760000
+                       :VTBCUOTAS-TOT-CUOCOR ,                          07770000
+                       :VTBCUOTAS-ESTADO-OPERACION ,                    07780000
+                       :VTBCUOTAS-FEC-PREVIA ,                          07790000
+                       :VTBCUOTAS-COD-RECU-DEVENG ,                          07800000
+                       :VTBCUOTAS-TIPO-MONED ,                          07810000
+                       :VTBCUOTAS-INDI-CUE-IMPOSIT ,                          07820000
+                       :VTBCUOTAS-FEC-SITOPE-COR ,                          07830000
+                       :VTBCUOTAS-FEC-SITOP-EXEN ,                          07840000
+                       :VTBCUOTAS-IMPOR-COMESTI ,                          07850000
+                       :VTBCUOTAS-TASA-INTER-RETEN ,                          07860000
+                       :VTBCUOTAS-IMPOR-INTE-RETEN ,                           07870000
+                       :VTBCUOTAS-TASA-COMIAPER ,                           07880000
+                       :VTBCUOTAS-IMPOR-COMIAPERT ,                           07890000
+                       :VTBCUOTAS-IMPOR-COMICOR ,                           07900000
+                       :VTBCUOTAS-TOT-IMPOS-OTRCONCEP ,                           07910000
+                       :VTBCUOTAS-IMPOR-COMI-PREM ,                           07920000
+                       :VTBCUOTAS-IMPOR-A-CUOVENCI ,                           07930000
+                       :VTBCUOTAS-IMPOR-IMPOSISEG ,                           07940000
+                       :VTBCUOTAS-IMPOR-COMIADMIN ,                           07950000
+                       :VTBCUOTAS-IMPOR-SEGVIDA ,                           07960000
+                       :VTBCUOTAS-IMPOR-SE-NOCUB )                           07970000
+           END-EXEC.                                                     07980000
+                                                                         07990000
+                                                                         08010000
+           EVALUATE SQLCODE                                              08020000
+               WHEN 0                                                    08030000
+                    ADD  1               TO W-INS-VTBCUOTAS              08040000
+               WHEN OTHER                                                08050000
+                    DISPLAY 'ERROR INSERT TTBCUOTAS --> CONTRATO: '      08060000
+                                            VTBCUOTAS-N-CONTRAT         08070000
+                    MOVE SQLCODE         TO W-SQLCODE                    08080000
+                    DISPLAY 'SQLCODE: '     W-SQLCODE                    08090000
+                                                                         08100000
+                    PERFORM CANCELAR                                     08110000
+                       THRU F-CANCELAR                                   08120000
+           END-EVALUATE.                                                 08130000
+      *                                                                  08140000
+       F-INSERT-VTBCUOTAS.                                               08150000
+           EXIT.                                                         08160000
+                                                                         08170000
+      *----------------------------------------------------------------* 08180000
+       GRABAR-TBCUOTAS.                                                  08190000
+      *---------------*                                                  08200000
+      *                                                                  08210000
+           WRITE REG-TBCUOTAS FROM VTBCUOTAS-P                           08220000
+                                                                         08230000
+           EVALUATE TRUE                                                 08240000
+               WHEN FS-TBCUOTAS-OK                                       08250000
+                    ADD 1                TO W-GRA-TBCUOTAS               08260000
+               WHEN OTHER                                                08270000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '       08280000
+                    DISPLAY 'ERROR EN PROCESO DE GRABADO FILE TBCUOTAS'  08290000
+                    DISPLAY 'FILE STATUS :  '  FS-TBCUOTAS               08300000
+                                                                         08310000
+                    PERFORM CANCELAR                                     08320000
+                       THRU F-CANCELAR                                   08330000
+           END-EVALUATE.                                                 08340000
+      *                                                                  08350000
+       F-GRABAR-TBCUOTAS.                                                08360000
+           EXIT.                                                         08370000
+                                                                         08380000
+      *----------------------------------------------------------------* 08390000
+       GENERAR-TBMOVIMIE.                                                  08400000
+      *----------------*                                                 08410000
+      *                                                                  08420000
+           INITIALIZE VTBMOVIMIE-P                                       08430000
+                                                                         08440000
+           MOVE COPGES3-N-CONTRAT      TO VTBMOVIMIE-N-CONTRAT.        08450000
+                                                                         08460000
+VER        COMPUTE VTBMOVIMIE-N-SEC-MOVI = 1 + VTBPRESTAMOS-ULTI-NUMMOV   08470000
+                                                                         08480000
+           MOVE VTBPRESTAMOS-BANCO-CODI      TO VTBMOVIMIE-BANCO-CODI.   08490000
+           MOVE VTBPRESTAMOS-CODI-OFIGRU      TO VTBMOVIMIE-CODI-OFIGRU.   08500000
+           MOVE VTBPRESTAMOS-CLASI-NUME      TO VTBMOVIMIE-CLASI-NUME.   08510000
+           MOVE VTBPRESTAMOS-INDIC-CUENTA      TO VTBMOVIMIE-INDIC-CUENTA.   08520000
+           MOVE COPGES3-F-LIQ           TO VTBMOVIMIE-FEC-MOVIM.        08530000
+           MOVE COPGES3-F-LIQ           TO VTBMOVIMIE-F-VALO-MOV.        08540000
+           MOVE 32                       TO VTBMOVIMIE-C-TRAN-MOV.       08550000
+                                                                         08560000
+           COMPUTE VTBMOVIMIE-IMPOR-MOVI =  COPGES3-IMPOR-SE-NOCUB * -1.     08570000
+                                                                         08580000
+           MOVE 1                        TO VTBMOVIMIE-C-VIG-MOVI.       08590000
+           MOVE 2                        TO VTBMOVIMIE-C-TRAT-MOV.       08600000
+           MOVE 1                        TO VTBMOVIMIE-IN-IM-STEO.       08610000
+           MOVE 1                        TO VTBMOVIMIE-NU-CONTABLE.       08620000
+           COMPUTE VTBMOVIMIE-OPERACION-ID = 1 + VTBPRESTAMOS-CANT-OPEREM   08630000
+           PERFORM INSERT-VTBMOVIMIE                                     08830000
+              THRU F-INSERT-VTBMOVIMIE.                                  08840000
+      *                                                                  08850000
+       F-GENERAR-TBMOVIMIE.                                                08860000
+           EXIT.                                                         08870000
+                                                                         08880000
+      *----------------------------------------------------------------* 08890000
+       INSERT-VTBMOVIMIE.                                                08900000
+      *---------------*                                                  08910000
+      *                                                                  08920000
+           EXEC SQL                                                      08930000
+                INSERT INTO VTBMOVIMIE                                   08940000
+                       (N_CONTRAT ,                                     08950000
+                        N_SEC_MOVI ,                                     08960000
+                        BANCO_CODI ,                                     08970000
+                        CODI_OFIGRU ,                                     08980000
+                        CLASI_NUME ,                                     08990000
+                        INDIC_CUENTA ,                                     09000000
+                        FEC_MOVIM ,                                     09010000
+                        F_VALO_MOV ,                                     09020000
+                        C_TRAN_MOV ,                                    09030000
+                        IMPOR_MOVI ,                                    09040000
+                        C_VIG_MOVI ,                                    09050000
+                        C_TRAT_MOV ,                                    09060000
+                        IN_IM_STEO ,                                    09070000
+                        NU_CONTABLE ,                                    09080000
+                        OPERACION_ID )                                    09090000
+                VALUES(:VTBMOVIMIE-N-CONTRAT ,                         09100000
+                       :VTBMOVIMIE-N-SEC-MOVI ,                         09110000
+                       :VTBMOVIMIE-BANCO-CODI ,                         09120000
+                       :VTBMOVIMIE-CODI-OFIGRU ,                         09130000
+                       :VTBMOVIMIE-CLASI-NUME ,                         09140000
+                       :VTBMOVIMIE-INDIC-CUENTA ,                         09150000
+                       :VTBMOVIMIE-FEC-MOVIM ,                         09160000
+                       :VTBMOVIMIE-F-VALO-MOV ,                         09170000
+                       :VTBMOVIMIE-C-TRAN-MOV ,                         09180000
+                       :VTBMOVIMIE-IMPOR-MOVI ,                         09190000
+                       :VTBMOVIMIE-C-VIG-MOVI ,                         09200000
+                       :VTBMOVIMIE-C-TRAT-MOV ,                         09210000
+                       :VTBMOVIMIE-IN-IM-STEO ,                         09220000
+                       :VTBMOVIMIE-NU-CONTABLE ,                         09230000
+                       :VTBMOVIMIE-OPERACION-ID )                         09240000
+           END-EXEC.                                                    09250000
+                                                                        09260000
+                                                                        09280000
+           EVALUATE SQLCODE                                             09290000
+               WHEN 0                                                   09300000
+                    ADD  1               TO W-INS-VTBMOVIMIE            09310000
+               WHEN OTHER                                               09320000
+                    DISPLAY 'ERROR INSERT TTBMOVIMIE --> CONTRATO: '    09330000
+                                            VTBMOVIMIE-N-CONTRAT       09340000
+                    MOVE SQLCODE         TO W-SQLCODE                   09350000
+                    DISPLAY 'SQLCODE: '     W-SQLCODE                   09360000
+                                                                        09370000
+                    PERFORM CANCELAR                                    09380000
+                       THRU F-CANCELAR                                  09390000
+           END-EVALUATE.                                                09400000
+      *                                                                 09410000
+       F-INSERT-VTBMOVIMIE.                                             09420000
+           EXIT.                                                        09430000
+                                                                        09440000
+      *----------------------------------------------------------------*09450000
+       MODIFICAR-VTBPRESTAMOS.                                          09460000
+      *------------------*                                              09470000
+      *                                                                 09480000
+                                                                        09500000
+        COMPUTE VTBPRESTAMOS-SALDO-CONSULTA = 				09520000
+		VTBPRESTAMOS-SALDO-CONSULTA + VTBMOVIMIE-IMPOR-MOVI	09520000                                                
+           MOVE COPGES3-F-LIQ           TO VTBPRESTAMOS-FEC-ACTUSAL.    09540000
+           MOVE VTBMOVIMIE-N-SEC-MOVI      TO VTBPRESTAMOS-ULTI-NUMMOV. 09550000
+           COMPUTE VTBPRESTAMOS-CANT-OPEREM =				09520000
+			 1 + VTBPRESTAMOS-CANT-OPEREM 			09560000
+           COMPUTE VTBPRESTAMOS-CANT-OPERPR =				09520000
+			1 + VTBPRESTAMOS-CANT-OPERPR 			09570000
+           MOVE COPGES3-F-LIQ           TO VTBPRESTAMOS-F-ULTI-LIQ.     09580000
+                                                                        09590000
+                                                                        09680000
+           PERFORM UPDATE-VTBPRESTAMOS                                  09690000
+              THRU F-UPDATE-VTBPRESTAMOS.                               09700000
+      *                                                                 09710000
+       F-MODIFICAR-VTBPRESTAMOS.                                        09720000
+           EXIT.                                                        09730000
+                                                                        09740000
+      *----------------------------------------------------------------*09750000
+       UPDATE-VTBPRESTAMOS.                                             09760000
+      *---------------*                                                 09770000
+      *                                                                 09780000
+           EXEC SQL                                                     09790000
+                UPDATE VTBPRESTAMOS                                     09800000
+                   SET SALDO_CONSULTA = :VTBPRESTAMOS-SALDO-CONSULTA ,  09810000
+                       FEC_ACTUSAL = :VTBPRESTAMOS-FEC-ACTUSAL ,        09820000
+                       ULTI_NUMMOV = :VTBPRESTAMOS-ULTI-NUMMOV ,        09830000
+                       CANT_OPEREM = :VTBPRESTAMOS-CANT-OPEREM ,        09840000
+                       CANT_OPERPR = :VTBPRESTAMOS-CANT-OPERPR ,        09850000
+                       F_ULTI_LIQ = :VTBPRESTAMOS-F-ULTI-LIQ            09860000
+                 WHERE N_CONTRAT = :VTBPRESTAMOS-N-CONTRAT              09870000
+           END-EXEC.                                                    09880000
+      *                                                                 09890000
+                                                                        09910000
+           EVALUATE SQLCODE                                             09920000
+               WHEN 0                                                   09930000
+                    ADD  1               TO W-UPD-VTBPRESTAMOS          09940000
+               WHEN OTHER                                               09950000
+                    DISPLAY 'ERROR UPDATE TTBPRESTAMOS --> CONTRATO: '  09960000
+                                            VTBPRESTAMOS-N-CONTRAT      09970000
+                    MOVE SQLCODE         TO W-SQLCODE                   09980000
+                    DISPLAY 'SQLCODE: '     W-SQLCODE                   09990000
+                                                                        10000000
+                    PERFORM CANCELAR                                    10010000
+                       THRU F-CANCELAR                                  10020000
+           END-EVALUATE.                                                10030000
+      *                                                                 10040000
+       F-UPDATE-VTBPRESTAMOS.                                           10050000
+           EXIT.                                                        10060000
+                                                                        10070000
+      *--------------------------------------------------------------*  10080000
+       SELECT-PTBDEVENGAM-0.                                            10090000
+      *----------------*                                                10100000
+      *                                                                 10110000
+           INITIALIZE   VTBDEVENGAM-P.                                  10120000
+                                                                        10130000
+           MOVE  COPGES3-N-CONTRAT   TO  VTBDEVENGAM-N-CONTRAT          10140000
+           MOVE  1                     TO  VTBDEVENGAM-NU-CONTABLE       10150000
+           MOVE  0                     TO  VTBDEVENGAM-OPERACION-ID       10160000
+                                                                        10170000
+           EXEC SQL SELECT                                              10180000
+                    N_CONTRAT,                                         10190000
+                    NU_CONTABLE,                                         10200000
+                    OPERACION_ID,                                         10210000
+                    FECHA_INICIO,                                         10220000
+                    ESTADO_PEDIDO,                                         10230000
+                    LIQUIDACION_NUM,                                         10240000
+                    IMPORTE_BASE,                                         10250000
+                    IMPORTE_AJUSTADO,                                         10260000
+                    FECHA_PROXIMA,                                         10270000
+                    FECHA_ANTERIOR,                                         10280000
+                    FECHA_DEVENGO,                                         10290000
+                    FECHA_CONSULTA,                                         10300000
+                    ITEM_NUMERO,                                         10310000
+                    IMPORTE_ACUMULADO,                                         10320000
+                    TIPO_LIQUIDACION,                                         10330000
+                    IMPO_AC_INIC,                                         10340000
+                    IM_LIQUIDA,                                         10350000
+                    IMPORTE_REGISTRADO,                                         10360000
+                    LIQUIDA_MD,                                         10370000
+                    FECHA_ALTA,                                            10380000
+                    FEC_ACTUALIZ,                                         10390000
+                    TIPO_LIQ_CLI,                                         10400000
+                    IMPOR_ACU_CL,                                         10410000
+                    TIPO_LQSUB,                                         10420000
+                    IMPOR_ACU_SUB                                          10430000
+                INTO                                                    10440000
+                   :VTBDEVENGAM-N-CONTRAT,                             10450000
+                   :VTBDEVENGAM-NU-CONTABLE,                             10460000
+                   :VTBDEVENGAM-OPERACION-ID,                             10470000
+                   :VTBDEVENGAM-FECHA-INICIO,                             10480000
+                   :VTBDEVENGAM-ESTADO-PEDIDO,                             10490000
+                   :VTBDEVENGAM-LIQUIDACION-NUM,                             10500000
+                   :VTBDEVENGAM-IMPORTE-BASE,                             10510000
+                   :VTBDEVENGAM-IMPORTE-AJUSTADO,                             10520000
+                   :VTBDEVENGAM-FECHA-PROXIMA   :NTBDEVENGAM-FECHA-PROXIMA,   10530000
+                   :VTBDEVENGAM-FECHA-ANTERIOR,                             10540000
+                   :VTBDEVENGAM-FECHA-DEVENGO,                             10550000
+                   :VTBDEVENGAM-FECHA-CONSULTA   :NTBDEVENGAM-FECHA-CONSULTA,   10560000
+                   :VTBDEVENGAM-ITEM-NUMERO,                             10570000
+                   :VTBDEVENGAM-IMPORTE-ACUMULADO,                             10580000
+                   :VTBDEVENGAM-TIPO-LIQUIDACION,                             10590000
+                   :VTBDEVENGAM-IMPO-AC-INIC,                             10600000
+                   :VTBDEVENGAM-IM-LIQUIDA,                             10610000
+                   :VTBDEVENGAM-IMPORTE-REGISTRADO,                                10620000
+                   :VTBDEVENGAM-LIQUIDA-MD,                                10630000
+                   :VTBDEVENGAM-FECHA-ALTA,                                   10640000
+                   :VTBDEVENGAM-FEC-ACTUALIZ,                                10650000
+                   :VTBDEVENGAM-TIPO-LIQ-CLI,                                10660000
+                   :VTBDEVENGAM-IMPOR-ACU-CL,                                10670000
+                   :VTBDEVENGAM-TIPO-LQSUB,                                10680000
+                   :VTBDEVENGAM-IMPOR-ACU-SUB                                 10690000
+                FROM VTBDEVENGAM                                           10700000
+                WHERE  N_CONTRAT = :VTBDEVENGAM-N-CONTRAT                10710000
+                  AND  NU_CONTABLE = :VTBDEVENGAM-NU-CONTABLE                10720000
+                  AND  OPERACION_ID = :VTBDEVENGAM-OPERACION-ID                10730000
+                  AND  ESTADO_PEDIDO <> 4                                  10740000
+           END-EXEC.                                                    10750000
+                                                                        10760000
+           EVALUATE SQLCODE                                             10770000
+              WHEN 0                                                    10780000
+                    CONTINUE                                            10790000
+              WHEN -811                                                 10800000
+                    CONTINUE                                            10810000
+              WHEN OTHER                                                10820000
+                    DISPLAY 'ERROR SELECT VTBDEVENGAM --> CONTRATO: '      10830000
+                                            COPGES3-N-CONTRAT         10840000
+                    MOVE SQLCODE         TO W-SQLCODE                   10850000
+                    DISPLAY 'SQLCODE: '     W-SQLCODE                   10860000
+                                                                        10870000
+                    PERFORM CANCELAR                                    10880000
+                       THRU F-CANCELAR                                  10890000
+           END-EVALUATE.                                                10900000
+                                                                        10910000
+           MOVE  VTBDEVENGAM-FECHA-CONSULTA  TO  W-FECHA-CONSULTA.                 10920000
+                                                                        10930000
+       F-SELECT-PTBDEVENGAM-0.                                              10940000
+           EXIT.                                                        10950000
+                                                                        10960000
+      *-----------------------------------------------------------------10970000
+       CALL-PROGAJU.                                                   10980000
+      *-------------*                                                   10990000
+      *                                                                 11000000
+           INITIALIZE                    PTCAJU01                       11010000
+           MOVE 1                     TO PTCAJU01-I-COD-ENTRAD          11020000
+           MOVE VTBPRESTAMOS-CERSIO-NU   TO PTCAJU01-I-CERSIO-NU      11030000
+           MOVE VTBPRESTAMOS-FEC-FORMAC   TO PTCAJU01-I-FEC-FORMAC      11040000
+                                                                        11050000
+           CALL PROGAJU USING PTCAJU01                                 11060000
+                                                                        11070000
+           IF PTCAJU01-COD-RETORNO = ZEROS                              11080000
+              CONTINUE                                                  11090000
+           ELSE                                                         11100000
+              DISPLAY 'ERROR MODULO PROGAJU --> CONTRATO: '            11110000
+                                      COPGES3-N-CONTRAT               11120000
+              DISPLAY 'RETORNO: '  PTCAJU01-COD-RETORNO                 11130000
+              DISPLAY 'MENSAJE: '  PTCAJU01-MENSAJE                     11140000
+                                                                        11150000
+              PERFORM CANCELAR                                          11160000
+                 THRU F-CANCELAR                                        11170000
+           END-IF.                                                      11180000
+                                                                        11190000
+       F-CALL-PROGAJU.                                                 11200000
+           EXIT.                                                        11210000
+                                                                        11220000
+      *---------------------------------------------------------------* 11230000
+       GENERAR-TBDEVENGAM.                                                 11240000
+      *----------------*                                                11250000
+      *                                                                 11260000
+           INITIALIZE VTBDEVENGAM-P                                        11270000
+           MOVE COPGES3-N-CONTRAT      TO VTBDEVENGAM-N-CONTRAT         11280000
+           MOVE VTBCUOTAS-NU-CONTABLE      TO VTBDEVENGAM-NU-CONTABLE         11290000
+           MOVE VTBCUOTAS-OPERACION-ID      TO VTBDEVENGAM-OPERACION-ID         11300000
+           MOVE COPGES3-F-LIQ           TO VTBDEVENGAM-FECHA-INICIO         11310000
+           MOVE 2                        TO VTBDEVENGAM-ESTADO-PEDIDO         11320000
+           MOVE 10                       TO VTBDEVENGAM-LIQUIDACION-NUM         11330000
+           MOVE COPGES3-IMPOR-SE-NOCUB      TO VTBDEVENGAM-IMPORTE-BASE         11340000
+           MOVE ZEROES                   TO VTBDEVENGAM-IMPORTE-AJUSTADO         11350000
+           MOVE '9999-12-31'             TO VTBDEVENGAM-FECHA-PROXIMA         11360000
+           MOVE COPGES3-F-LIQ           TO VTBDEVENGAM-FECHA-ANTERIOR         11370000
+                                            VTBDEVENGAM-FECHA-DEVENGO         11380000
+           MOVE W-FECHA-CONSULTA             TO VTBDEVENGAM-FECHA-CONSULTA         11390000
+           IF VTBPRESTAMOS-CERSIO-NU NOT = 0                               11400000
+                MOVE PTCAJU01-O-ITEM-NUMERO TO VTBDEVENGAM-ITEM-NUMERO       11410000
+           ELSE                                                         11420000
+                MOVE ZEROES                TO VTBDEVENGAM-ITEM-NUMERO       11430000
+           END-IF                                                       11440000
+           MOVE ZEROES                   TO VTBDEVENGAM-IMPORTE-ACUMULADO         11450000
+           IF TIENE-SUBSIDIO                                            11460000
+                MOVE VTBPRESTAMOS-TIPO-CONTT   TO VTBDEVENGAM-TIPO-LIQUIDACION       11470000
+                MOVE VTBCUOTAS-TASA-INTERES-NL   TO VTBDEVENGAM-TIPO-LIQ-CLI       11480000
+                COMPUTE VTBDEVENGAM-TIPO-LQSUB =                           11490000
+                        VTBDEVENGAM-TIPO-LIQUIDACION - VTBDEVENGAM-TIPO-LIQ-CLI       11500000
+           ELSE                                                         11510000
+                MOVE VTBCUOTAS-TASA-INTE-EXELIN   TO VTBDEVENGAM-TIPO-LIQUIDACION       11520000
+                MOVE VTBCUOTAS-TASA-INTE-EXELIN   TO VTBDEVENGAM-TIPO-LIQ-CLI       11530000
+                MOVE ZEROES                TO VTBDEVENGAM-TIPO-LQSUB       11540000
+           END-IF                                                       11550000
+           MOVE ZEROES                   TO VTBDEVENGAM-IMPO-AC-INIC         11560000
+                                            VTBDEVENGAM-IM-LIQUIDA         11570000
+                                            VTBDEVENGAM-IMPORTE-REGISTRADO         11580000
+           MOVE VTBPRESTAMOS-LIQUIDA-MD      TO VTBDEVENGAM-LIQUIDA-MD         11590000
+           MOVE COPGES3-F-LIQ           TO VTBDEVENGAM-FECHA-ALTA            11600000
+                                            VTBDEVENGAM-FEC-ACTUALIZ         11610000
+           MOVE ZEROES                   TO VTBDEVENGAM-IMPOR-ACU-CL         11620000
+                                            VTBDEVENGAM-IMPOR-ACU-SUB         11630000
+           .                                                            11640000
+       F-GENERAR-TBDEVENGAM.                                               11650000
+           EXIT.                                                        11660000
+                                                                        11670000
+      *---------------------------------------------------------------* 11680000
+       INSERT-TBDEVENGAM.                                                  11690000
+      *----------------*                                                11700000
+      *                                                                 11710000
+           EXEC SQL INSERT                                              11720000
+                INTO VTBDEVENGAM                                           11730000
+                   (N_CONTRAT,                                         11740000
+                    NU_CONTABLE,                                         11750000
+                    OPERACION_ID,                                         11760000
+                    FECHA_INICIO,                                         11770000
+                    ESTADO_PEDIDO,                                         11780000
+                    LIQUIDACION_NUM,                                         11790000
+                    IMPORTE_BASE,                                         11800000
+                    IMPORTE_AJUSTADO,                                         11810000
+                    FECHA_PROXIMA,                                         11820000
+                    FECHA_ANTERIOR,                                         11830000
+                    FECHA_DEVENGO,                                         11840000
+                    FECHA_CONSULTA,                                         11850000
+                    ITEM_NUMERO,                                         11860000
+                    IMPORTE_ACUMULADO,                                         11870000
+                    TIPO_LIQUIDACION,                                         11880000
+                    IMPO_AC_INIC,                                         11890000
+                    IM_LIQUIDA,                                         11900000
+                    IMPORTE_REGISTRADO,                                         11910000
+                    LIQUIDA_MD,                                         11920000
+                    FECHA_ALTA,                                            11930000
+                    FEC_ACTUALIZ,                                         11940000
+                    TIPO_LIQ_CLI,                                         11950000
+                    IMPOR_ACU_CL,                                         11960000
+                    TIPO_LQSUB,                                         11970000
+                    IMPOR_ACU_SUB)                                         11980000
+                VALUES                                                  11990000
+                  (:VTBDEVENGAM-N-CONTRAT,                                12000000
+                   :VTBDEVENGAM-NU-CONTABLE,                                12010000
+                   :VTBDEVENGAM-OPERACION-ID,                                12020000
+                   :VTBDEVENGAM-FECHA-INICIO,                                12030000
+                   :VTBDEVENGAM-ESTADO-PEDIDO,                                12040000
+                   :VTBDEVENGAM-LIQUIDACION-NUM,                                12050000
+                   :VTBDEVENGAM-IMPORTE-BASE,                                12060000
+                   :VTBDEVENGAM-IMPORTE-AJUSTADO,                                12070000
+                   :VTBDEVENGAM-FECHA-PROXIMA   :NTBDEVENGAM-FECHA-PROXIMA,         12080000
+                   :VTBDEVENGAM-FECHA-ANTERIOR,                                12090000
+                   :VTBDEVENGAM-FECHA-DEVENGO,                                12100000
+                   :VTBDEVENGAM-FECHA-CONSULTA   :NTBDEVENGAM-FECHA-CONSULTA,         12110000
+                   :VTBDEVENGAM-ITEM-NUMERO,                                12120000
+                   :VTBDEVENGAM-IMPORTE-ACUMULADO,                                12130000
+                   :VTBDEVENGAM-TIPO-LIQUIDACION,                                12140000
+                   :VTBDEVENGAM-IMPO-AC-INIC,                                12150000
+                   :VTBDEVENGAM-IM-LIQUIDA,                                12160000
+                   :VTBDEVENGAM-IMPORTE-REGISTRADO,                                12170000
+                   :VTBDEVENGAM-LIQUIDA-MD,                                12180000
+                   :VTBDEVENGAM-FECHA-ALTA,                                   12190000
+                   :VTBDEVENGAM-FEC-ACTUALIZ,                                12200000
+                   :VTBDEVENGAM-TIPO-LIQ-CLI,                                12210000
+                   :VTBDEVENGAM-IMPOR-ACU-CL,                                12220000
+                   :VTBDEVENGAM-TIPO-LQSUB,                                12230000
+                   :VTBDEVENGAM-IMPOR-ACU-SUB)                                12240000
+           END-EXEC.                                                    12250000
+                                                                        12260000
+           EVALUATE SQLCODE                                             12270000
+              WHEN 0                                                    12280000
+                    ADD  1               TO W-INS-PTBDEVENGAM               12290000
+              WHEN OTHER                                                12300000
+                    DISPLAY 'ERROR INSERT TTBDEVENGAM --> CONTRATO: '      12310000
+                                            COPGES3-N-CONTRAT         12320000
+                    MOVE SQLCODE         TO W-SQLCODE                   12330000
+                    DISPLAY 'SQLCODE: '     W-SQLCODE                   12340000
+                                                                        12350000
+                    PERFORM CANCELAR                                    12360000
+                       THRU F-CANCELAR                                  12370000
+           END-EVALUATE.                                                12380000
+                                                                        12390000
+       F-INSERT-TBDEVENGAM.                                                12400000
+           EXIT.                                                        12410000
+                                                                        12420000
+      *----------------------------------------------------------------*12430000
+       GRABAR-SALIDA.                                                   12440000
+      *--------------*                                                  12450000
+      *                                                                 12460000
+           MOVE COPGES3-N-CONTRAT      TO COPGES5-N-CONTRAT         12470000
+           MOVE VTBPRESTAMOS-BANCO-CODI      TO COPGES5-BANCO-CODI         12480000
+           MOVE VTBPRESTAMOS-CODI-OFIGRU      TO COPGES5-CODI-OFIGRU         12490000
+           MOVE VTBPRESTAMOS-CLASI-NUME      TO COPGES5-CLASI-NUME         12500000
+           MOVE VTBPRESTAMOS-INDIC-CUENTA      TO COPGES5-INDIC-CUENTA         12510000
+           MOVE VTBCUOTAS-OPERACION-ID      TO COPGES5-OPERACION-ID         12520000
+           MOVE COPGES3-F-LIQ           TO COPGES5-F-LIQ              12530000
+           MOVE VTBPRESTAMOS-CUENTA-CONT      TO COPGES5-CUENTA-CONT         12540000
+           MOVE COPGES3-TIPO-MONED      TO COPGES5-TIPO-MONED         12550000
+           MOVE COPGES3-IMPOR-SE-NOCUB      TO COPGES5-IMPOR-SE-NOCUB         12560000
+                                                                        12570000
+           WRITE REG-SALIDA FROM REG-COPGES5.                          12580000
+                                                                        12590000
+           EVALUATE TRUE                                                12600000
+               WHEN FS-SALIDA-OK                                        12610000
+                    ADD 1                TO W-GRA-SALIDA                12620000
+               WHEN OTHER                                               12630000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '      12640000
+                    DISPLAY 'ERROR EN PROCESO DE GRABADO FILE SALIDA'   12650000
+                    DISPLAY 'FILE STATUS :  '  FS-SALIDA                12660000
+                                                                        12670000
+                    PERFORM CANCELAR                                    12680000
+                       THRU F-CANCELAR                                  12690000
+           END-EVALUATE.                                                12700000
+      *                                                                 12710000
+       F-GRABAR-SALIDA.                                                 12720000
+           EXIT.                                                        12730000
+                                                                        12740000
+      *----------------------------------------------------------------*12750000
+       CANCELAR.                                                        12760000
+      *---------*                                                       12770000
+      *                                                                 12780000
+           IF W-INS-VTBCUOTAS > 0                                         12790000
+              EXEC SQL ROLLBACK END-EXEC                                12800000
+           END-IF                                                       12810000
+                                                                        12820000
+           CALL W-CANCEL.                                               12830000
+      *                                                                 12840000
+       F-CANCELAR.                                                      12850000
+           EXIT.                                                        12860000
+                                                                        12870000
+      *----------------------------------------------------------------*12880000
+       0030-TRATAMIENTO-FINAL.                                          12890000
+      *----------------------*                                          12900000
+      *                                                                 12910000
+            DISPLAY '******************************************'.       12920000
+            DISPLAY '********** FIN O.K. COPGES5 *************'.       12930000
+            DISPLAY '******************************************'.       12940000
+            DISPLAY '* TOTAL LEIDOS ENTRADA  : ' W-LEIDOS-ENT.          12950000
+            DISPLAY '*-----------------------------------------'.       12960000
+            DISPLAY '* TOTAL SELECT VTBPRESTAMOS:' W-SEL-VTBPRESTAMOS.  12970000
+            DISPLAY '* TOTAL INSERT VTBCUOTAS  : ' W-INS-VTBCUOTAS.     12980000
+            DISPLAY '* TOTAL GRABADOS TBDEVENGAM : ' W-GRA-TBCUOTAS.        12990000
+            DISPLAY '* TOTAL INSERT VTBMOVIMIE  : ' W-INS-VTBMOVIMIE.   13000000
+            DISPLAY '* TOTAL UPDATE VTBPRESTAMOS: ' W-UPD-VTBPRESTAMOS. 13010000
+            DISPLAY '* TOTAL INSERT PTBDEVENGAM  : ' W-INS-PTBDEVENGAM. 13020000
+            DISPLAY '*-----------------------------------------'.       13030000
+            DISPLAY '* TOTAL GRABADOS SALIDA : ' W-GRA-SALIDA.          13040000
+            DISPLAY '******************************************'.       13050000
+                                                                        13060000
+           PERFORM CERRAR-ARCHIVOS                                      13070000
+              THRU F-CERRAR-ARCHIVOS.                                   13080000
+      *                                                                 13090000
+       0030-FIN-TRATAMIENTO-FINAL.                                      13100000
+           EXIT.                                                        13110000
+                                                                        13120000
+      *----------------------------------------------------------------*13130000
+       CERRAR-ARCHIVOS.                                                 13140000
+      *----------------*                                                13150000
+      *                                                                 13160000
+           CLOSE ENTRADA.                                               13170000
+                                                                        13180000
+           EVALUATE FS-ENTRADA                                          13190000
+               WHEN '00'                                                13200000
+                    CONTINUE                                            13210000
+               WHEN OTHER                                               13220000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '      13230000
+                    DISPLAY 'ERROR EN EL CIERRE DEL FILE ENTRADA'       13240000
+                    DISPLAY 'FILE STATUS :  '  FS-ENTRADA               13250000
+                                                                        13260000
+                    PERFORM CANCELAR                                    13270000
+                       THRU F-CANCELAR                                  13280000
+           END-EVALUATE.                                                13290000
+      *                                                                 13300000
+           CLOSE SALIDA.                                                13310000
+                                                                        13320000
+           EVALUATE FS-SALIDA                                           13330000
+               WHEN '00'                                                13340000
+                    CONTINUE                                            13350000
+               WHEN OTHER                                               13360000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '      13370000
+                    DISPLAY 'ERROR EN EL CIERRE DEL FILE SALIDA '       13380000
+                    DISPLAY 'FILE STATUS :  '  FS-SALIDA                13390000
+                                                                        13400000
+                    PERFORM CANCELAR                                    13410000
+                       THRU F-CANCELAR                                  13420000
+           END-EVALUATE.                                                13430000
+      *                                                                 13440000
+           CLOSE TBCUOTAS.                                               13450000
+                                                                        13460000
+           EVALUATE FS-TBCUOTAS                                          13470000
+               WHEN '00'                                                13480000
+                    CONTINUE                                            13490000
+               WHEN OTHER                                               13500000
+                    DISPLAY 'CANCELACION PROGRAMADA PGM COPGES5 '      13510000
+                    DISPLAY 'ERROR EN EL CIERRE DEL FILE TBCUOTAS'       13520000
+                    DISPLAY 'FILE STATUS :  '  FS-TBCUOTAS               13530000
+                                                                        13540000
+                    PERFORM CANCELAR                                    13550000
+                       THRU F-CANCELAR                                  13560000
+           END-EVALUATE.                                                13570000
+      *                                                                 13580000
+       F-CERRAR-ARCHIVOS.                                               13590000
+           EXIT.                                                        13600000
+      *---------------------------------------------------------------* 13610000
+      *                      FIN PROGRAMA COPGES5                    * 13620000
+      *---------------------------------------------------------------* 13630000
+
