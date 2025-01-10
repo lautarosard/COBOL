@@ -1,0 +1,140 @@
+//LAU00021 JOB (INFORMEL),'PRESTAMOS',REGION=0M,NOTIFY=&SYSUID,         
+//         MSGLEVEL=(1,1),MSGCLASS=X,CLASS=C,TIME=1440,
+//         COND=(4,LT),RESTART=*
+//*----------------------------------------------------------------+
+//JOBLIB   DD  DSN=LAUWRK.LOADLIB,DISP=SHR
+//REPOSIT  JCLLIB  ORDER=LAWK.PROCLIB
+//********************************************************************
+//DEL001   EXEC  PGM=IDCAMS
+//********************************************************************
+//SYSPRINT DD  SYSOUT=*
+//SYSIN    DD  *
+     DELETE LAWK.SAR.SORT1.PRESTAMOS
+     DELETE LAWK.SAR.JOIN1.CUACOJON
+     DELETE LAWK.SAR.SORT2.CUACOSOT
+     DELETE LAWK.SAR.SORT3.OPSEGSOT
+     DELETE LAWK.RAS.NOAPA1.PRES
+     DELETE LAWK.RAS.NOAPA2.INCEN
+           SET MAXCC=0
+/*
+//*---------------------------------------------------------------------
+//SORT001  EXEC PGM=SORT
+//SORTIN   DD DSN=ARIEPASS.RAS.UNLOAD.PRESTAMOS,DISP=SHR
+//SORTOUT  DD DSN=LAWK.SAR.SORT1.PRESTAMOS,
+//            DISP=(,CATLG,DELETE),
+//            SPACE=(CYL,(50,10),RLSE),
+//            RECFM=FB
+//SORTWK01 DD SPACE=(CYL,(1))
+//SORTWK02 DD SPACE=(CYL,(1))
+//SORTWK03 DD SPACE=(CYL,(1))
+//SORTWK04 DD SPACE=(CYL,(1))
+//SYSOUT   DD SYSOUT=*
+//SYSIN DD *
+  SORT FIELDS=(1,4,A),FORMAT=BI
+  INCLUDE COND=(017,10,CH,GE,C'2023-01-01',AND,          ALTA
+                311,1,PD,EQ,6,AND,                      UVA
+                312,2,PD,EQ,355)                        PRODU
+//*------------------------------------------------------------------*
+//*JOIN CON INCENDIO
+//*------------------------------------------------------------------*
+//PASO0003 EXEC PGM=SORT
+//SYSOUT   DD SYSOUT=*
+//SORTJNF1 DD DSN=LAWK.SAR.SORT1.PRESTAMOS,
+//            DISP=SHR
+//SORTJNF2 DD DSN=ARIEPASS.RAS.UNLOAD.INCENDIO,
+//            DISP=SHR
+//APAREO   DD DSN=LAWK.SAR.JOIN1.CUACOJON,
+//            DISP=(NEW,CATLG,DELETE),
+//            SPACE=(CYL,(20,10),RLSE),UNIT=SYSDA
+//*REG DE CONVENIO F1 QUE NO ESTAN EN F2
+//NOAPA1   DD DSN=LAWK.RAS.NOAPA1.PRES,
+//            DISP=(NEW,CATLG,DELETE),
+//            SPACE=(CYL,(20,10),RLSE),UNIT=SYSDA
+//*REG DE SEGUROS F2 QUE NO ESTAN EN F1
+//NOAPA2   DD DSN=LAWK.RAS.NOAPA2.INCEN,
+//            DISP=(NEW,CATLG,DELETE),
+//            SPACE=(CYL,(20,10),RLSE),UNIT=SYSDA
+//SYSPRINT DD SYSOUT=*
+//SYSERROR DD SYSOUT=*
+//SYSTPRT  DD SYSOUT=*
+//SYSIN   DD *
+ JOINKEYS FILE=F1,FIELDS=(01,04,A)
+ JOINKEYS FILE=F2,FIELDS=(01,04,A)
+ JOIN UNPAIRED
+ REFORMAT FIELDS=(F1:01,321,
+                  F2:01,175,?)
+ OPTION COPY
+ OUTFIL FNAMES=APAREO,INCLUDE=(497,1,CH,EQ,C'B'),
+        OUTREC=(322,175,8,3)
+ OUTFIL FNAMES=NOAPA1,INCLUDE=(497,1,CH,EQ,C'1'),
+        OUTREC=(01,321)
+ OUTFIL FNAMES=NOAPA2,INCLUDE=(497,1,CH,EQ,C'2'),
+        OUTREC=(322,175)
+//*----------------------------------------------*
+//DEL002   EXEC  PGM=IDCAMS
+//********************************************************************
+//SYSPRINT DD  SYSOUT=*
+//SYSIN    DD  *
+     DELETE LAWK.SAR.SORT2.CUACOSOT
+     DELETE LAWK.SAR.SORT3.OPSEGSOT
+           SET MAXCC=0
+/*
+//*----------------------------------------------*
+//*ORDENAR EN BASE OP-CUACO
+//*----------------------------------------------*
+//SORT002  EXEC PGM=SORT
+//SORTIN   DD DSN=LAWK.SAR.JOIN1.CUACOJON,DISP=SHR
+//SORTOUT  DD DSN=LAWK.SAR.SORT2.CUACOSOT,
+//            DISP=(,CATLG,DELETE),
+//            SPACE=(CYL,(50,10),RLSE),
+//            RECFM=FB
+//SYSOUT   DD SYSOUT=*
+//SYSIN    DD *
+ SORT  FIELDS=(1,4,BI,A,07,2,PD,A)
+//*---------------------------------------------------------------------
+//SORT0003 EXEC PGM=SORT
+//SORTIN   DD DSN=LAWK.SAR.SORT2.CUACOSOT,DISP=SHR
+//SORTOUT  DD DSN=LAWK.SAR.SORT3.OPSEGSOT,
+//            DISP=(,CATLG,DELETE),
+//            SPACE=(CYL,(50,10),RLSE),
+//            RECFM=FB
+//SORTWK01 DD SPACE=(CYL,(1))
+//SORTWK02 DD SPACE=(CYL,(1))
+//SORTWK03 DD SPACE=(CYL,(1))
+//SORTWK04 DD SPACE=(CYL,(1))
+//SYSOUT   DD SYSOUT=*
+//SYSIN DD *
+  SORT FIELDS=COPY
+  INCLUDE COND=(170,6,PD,GT,0)                SEG-INCEN
+//*---------------------------------------------------------------------
+//DELETE16 EXEC PGM=IDCAMS
+//SYSPRINT DD SYSOUT=*
+//SYSIN    DD *
+  DELETE LAWK.SAR.SORT4.INCENICE
+  SET MAXCC = 0
+/*
+//SORT17   EXEC PGM=SORT
+//SORTIN   DD DSN=LAWK.SAR.SORT3.OPSEGSOT,
+//            DISP=SHR
+//SORTOUT  DD DSN=LAWK.SAR.SORT4.INCENICE,
+//            DISP=(,CATLG,DELETE),
+//            SPACE=(CYL,(1,1),RLSE),
+//            RECFM=FB,LRECL=38
+//SYSOUT   DD SYSOUT=*
+//SYSIN    DD *
+     SORT FIELDS=COPY
+     OUTFIL FNAMES=SORTOUT,REMOVECC,
+     HEADER1=(1:C'LISTADO DE INCENDIO'),
+     HEADER2=(1:C'CONTRATO',
+              11:C'CUOTA',
+              17:C'SEG_INC',
+              35:C'SUCU'),
+     TRAILER1=(/'T : ',
+            TOT=(17,15,SFF,EDIT=(SIITTTTTTTTT,TT),SIGNS=(+,-)))
+     OUTREC FIELDS=(1:01,04,BI,TO=ZD,LENGTH=09,C' ',
+                    11:07,02,PD,TO=ZD,LENGTH=03,C' ',
+                    17:170,06,PD,EDIT=(TTTTTTTTTTTT,TT),C' ',
+                    35:176,03,PD,TO=ZD,LENGTH=04)
+//
+//*
+
